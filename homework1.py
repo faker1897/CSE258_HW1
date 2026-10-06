@@ -56,23 +56,23 @@ def featureQ2(datum, maxLen):
 
 
 def Q2(dataset):
-    """Return the one-hot design matrix, predicted ratings, and training MSE."""
+    """Return the one-hot design matrix, observed ratings, and training MSE."""
     X, y = _regression_data(dataset, featureQ2, getMaxLen(dataset))
-    _, predictions, mse = _least_squares(X, y)
-    return X, predictions, mse
+    _, _, mse = _least_squares(X, y)
+    return X, y, mse
 
 
 def featureQ3(datum, maxLen):
-    """Keep the stub signature while using raw length as written in Q3."""
+    """Return the intercept, normalized length, numeric weekday, and month."""
     date = datum["parsed_date"]
-    return [1, len(datum["review_text"]), date.weekday(), date.month]
+    return [1, _scaled_length(datum, maxLen), date.weekday(), date.month]
 
 
 def Q3(dataset):
-    """Return the numeric-date design matrix, predicted ratings, and MSE."""
+    """Return the numeric-date design matrix, observed ratings, and MSE."""
     X, y = _regression_data(dataset, featureQ3, getMaxLen(dataset))
-    _, predictions, mse = _least_squares(X, y)
-    return X, predictions, mse
+    _, _, mse = _least_squares(X, y)
+    return X, y, mse
 
 
 def Q4(dataset):
