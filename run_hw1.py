@@ -1,4 +1,4 @@
-"""Run the official HW1 interfaces on local data and check their behavior."""
+
 
 from __future__ import annotations
 
@@ -136,32 +136,33 @@ def run_small_checks():
     np.testing.assert_array_equal(baseline, [1, 0.5] + [0] * 17)
     expected = [1, 0.5] + [1, 0, 0, 0, 0, 0] + [1] + [0] * 10
     np.testing.assert_array_equal(hw.featureQ2(tuesday, 4), expected)
-    assert hw.featureQ3(tuesday, 999) == [1, 2, 1, 2]
+    assert hw.featureQ3(tuesday, 4) == [1, 0.5, 1, 2]
     assert hw.featureQ5({"review/text": "abc"}) == [3]
-    checked.append("intercept_normalization_encoding_order_and_raw_q3_length")
+    checked.append("intercept_normalization_and_encoding_order")
 
     exact = [_book(0, 1), _book(1, 3), _book(2, 5)]
     theta, mse = hw.Q1(exact)
     np.testing.assert_allclose(theta, [1, 4], atol=1e-12)
     assert abs(mse) < 1e-20
     nonlinear = [_book(0, 1), _book(1, 4), _book(2, 2)]
-    x2, predictions, mse2 = hw.Q2(nonlinear)
+    x2, observed2, mse2 = hw.Q2(nonlinear)
     labels = np.asarray([row["rating"] for row in nonlinear], dtype=float)
-    assert not np.allclose(predictions, labels)
+    np.testing.assert_array_equal(observed2, labels)
     expected_predictions = x2 @ np.linalg.lstsq(x2, labels, rcond=None)[0]
-    np.testing.assert_allclose(predictions, expected_predictions)
-    assert np.isclose(mse2, np.mean((predictions - labels) ** 2))
-    x3, predictions3, mse3 = hw.Q3(nonlinear)
-    assert not np.allclose(predictions3, labels)
+    assert not np.allclose(expected_predictions, labels)
+    assert np.isclose(mse2, np.mean((expected_predictions - labels) ** 2))
+    x3, observed3, mse3 = hw.Q3(nonlinear)
+    np.testing.assert_array_equal(observed3, labels)
     expected_predictions3 = x3 @ np.linalg.lstsq(x3, labels, rcond=None)[0]
-    np.testing.assert_allclose(predictions3, expected_predictions3)
-    assert np.isclose(mse3, np.mean((predictions3 - labels) ** 2))
-    checked.append("known_least_squares_solution_and_prediction_returns")
+    assert not np.allclose(expected_predictions3, labels)
+    assert np.isclose(mse3, np.mean((expected_predictions3 - labels) ** 2))
+    checked.append("known_least_squares_solution_and_observed_rating_returns")
 
     empty_reviews = [_book(0, 1), _book(0, 3)]
     assert hw.getMaxLen(empty_reviews) == 0
     assert hw.featureQ1(empty_reviews[0], 0) == [1, 0]
     assert hw.featureQ2(empty_reviews[0], 0) == [1, 0] + [0] * 17
+    assert hw.featureQ3(empty_reviews[0], 0) == [1, 0, 0, 1]
     empty_theta, empty_mse = hw.Q1(empty_reviews)
     np.testing.assert_allclose(empty_theta, [2, 0], atol=1e-12)
     assert np.isclose(empty_mse, 1.0)
@@ -242,12 +243,21 @@ def _finite(value):
 def run_full_checks(books, beer, outputs, arrays):
     """Validate full-data outputs already computed by the runner."""
     assert len(books) == 10000 and len(beer) == 50000
-    theta, x2, predictions2, x3, predictions3 = arrays
+    theta, x2, observed2, x3, observed3 = arrays
     assert isinstance(theta, np.ndarray) and theta.shape == (2,)
     assert isinstance(x2, np.ndarray) and x2.shape == (len(books), 19)
     assert isinstance(x3, np.ndarray) and x3.shape == (len(books), 4)
-    assert isinstance(predictions2, np.ndarray) and predictions2.shape == (len(books),)
-    assert isinstance(predictions3, np.ndarray) and predictions3.shape == (len(books),)
+    assert isinstance(observed2, np.ndarray) and observed2.shape == (len(books),)
+    assert isinstance(observed3, np.ndarray) and observed3.shape == (len(books),)
+    expected_labels = np.asarray([row["rating"] for row in books], dtype=float)
+    np.testing.assert_array_equal(observed2, expected_labels)
+    np.testing.assert_array_equal(observed3, expected_labels)
+    maximum_length = max(len(row["review_text"]) for row in books)
+    expected_lengths = np.asarray(
+        [len(row["review_text"]) for row in books], dtype=float
+    ) / maximum_length
+    np.testing.assert_allclose(x2[:, 1], expected_lengths, rtol=0, atol=0)
+    np.testing.assert_allclose(x3[:, 1], expected_lengths, rtol=0, atol=0)
     assert all(_finite(array) for array in arrays)
     for question in ("Q1", "Q2", "Q3"):
         assert type(outputs[question]["mse"]) is float
@@ -279,7 +289,7 @@ def run_full_checks(books, beer, outputs, arrays):
         outputs["Q7"]["metrics"]["BER"], outputs["Q7"]["candidate_ber"][selected]
     )
     return [
-        "complete_dataset_counts_and_shapes",
+        "complete_dataset_counts_shapes_observed_labels_and_normalized_lengths",
         "finite_outputs_and_scalar_return_types",
         "full_confusion_counts_ber_and_precision_ranges",
         "selected_q7_feature_matches_best_fixed_candidate",
@@ -324,8 +334,10 @@ def main(argv=None):
     random.Random(0).shuffle(shuffled)
 
     theta1, mse1 = hw.Q1(books)
-    x2, predictions2, mse2 = hw.Q2(books)
-    x3, predictions3, mse3 = hw.Q3(books)
+    x2, observed2, mse2 = hw.Q2(books)
+    x3, observed3, mse3 = hw.Q3(books)
+    predictions2 = x2 @ np.linalg.lstsq(x2, observed2, rcond=None)[0]
+    predictions3 = x3 @ np.linalg.lstsq(x3, observed3, rcond=None)[0]
     mse4_onehot, mse4_numeric = hw.Q4(shuffled)
     metrics5 = hw.Q5(beer, hw.featureQ5)
     precisions = hw.Q6(beer)
@@ -348,11 +360,15 @@ def main(argv=None):
         "Q1": {"theta": theta1.tolist(), "mse": mse1},
         "Q2": {
             "shape": list(x2.shape), "first_features": x2[0].tolist(),
-            "first_prediction": float(predictions2[0]), "mse": mse2,
+            "first_observed_rating": float(observed2[0]),
+            "first_prediction": float(predictions2[0]),
+            "y_semantics": "observed_ratings", "mse": mse2,
         },
         "Q3": {
             "shape": list(x3.shape), "first_features": x3[0].tolist(),
-            "first_prediction": float(predictions3[0]), "mse": mse3,
+            "first_observed_rating": float(observed3[0]),
+            "first_prediction": float(predictions3[0]),
+            "y_semantics": "observed_ratings", "mse": mse3,
         },
         "Q4": {"onehot_test_mse": mse4_onehot, "numeric_test_mse": mse4_numeric},
         "Q5": {"metrics": _metrics(metrics5)},
@@ -374,7 +390,7 @@ def main(argv=None):
     }
     if arguments.check:
         checked.extend(run_full_checks(
-            books, beer, outputs, (theta1, x2, predictions2, x3, predictions3)
+            books, beer, outputs, (theta1, x2, observed2, x3, observed3)
         ))
     results = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
