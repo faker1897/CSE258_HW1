@@ -1,4 +1,4 @@
-"""Homework 1 regression and classification functions."""
+
 
 import math
 import warnings
